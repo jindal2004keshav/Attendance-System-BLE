@@ -3,11 +3,11 @@ const HttpError = require("../Model/http-error");
 const path = require("path");
 
 
-const serviceAccount = require(path.join(__dirname, "../practice-73079651-firebase-adminsdk-fbsvc-1b19b9ce6f.json")); 
+// const serviceAccount = require(path.join(__dirname, "../serviceAccountKey.json")); 
 
 if (!admin.apps.length) {
     admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
+        credential: admin.credential.applicationDefault(),
     });
 }
 
