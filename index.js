@@ -3,6 +3,7 @@ const express = require("express");
 const MongooseConnect = require("./connect");
 const studentRouter = require("./Routes/student");
 const professorRouter = require("./Routes/professor");
+const amdinRouter = require("./Routes/admin");
 const HttpError = require("./Model/http-error");
 const authRouter = require("./Routes/auth");
 const { extractToken } = require("./Middleware/extractUid");
@@ -22,6 +23,7 @@ app.use(express.urlencoded({extended: false}));
 app.use("/api/student" ,studentRouter);
 app.use("/api/professor", professorRouter);
 app.use("/api/auth", authRouter);
+app.use("/api/admin", amdinRouter);
 
 
 app.use((req, res, next) => {

@@ -3,11 +3,11 @@ const HttpError = require("../Model/http-error");
 const path = require("path");
 
 
-// const serviceAccount = require(path.join(__dirname, "../serviceAccountKey.json")); 
+const serviceAccount = require(path.join(__dirname, "../serviceAccountKey.json")); 
 
 if (!admin.apps.length) {
     admin.initializeApp({
-        credential: admin.credential.applicationDefault(),
+        credential: admin.credential.cert(serviceAccount)
     });
 }
 
