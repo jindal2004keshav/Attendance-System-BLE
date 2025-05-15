@@ -1,6 +1,6 @@
 const professorModel = require("../Model/professorModel");
-const courseModel = require("../Model/courseModel");
-const attendanceModel = require("../Model/attendanceModel");
+const {Course, ArchivedCourse} = require("../Model/courseModel");
+const {Attendance, ArchivedAttendance } = require("../Model/attendanceModel");
 const studentModel = require("../Model/studentModel");
 const HttpError = require("../Model/http-error");
 
@@ -35,12 +35,12 @@ async function handleProfessorRegistration(req, res, next) {
   res.status(200).json({ user: professorCreated.toObject({ getters: true }) });
 }
 
-// View Courses Created by POrofessor using their email
+// View Courses Created by Professor 
 async function handleViewCoursesByProfessor(req, res, next) {
   const uid = req.uid;
 
   if (!uid) {
-    return next(new HttpError("not provided uid", 404));
+    return next(new HttpError("not provided uid", 400));
   }
 
   // extract professor and populate it with its courses
@@ -66,6 +66,35 @@ async function handleViewCoursesByProfessor(req, res, next) {
   });
 }
 
+async function handleViewArchivedCoursesByProfessor(req, res, next) {
+  const uid = req.uid;
+
+  if (!uid) {
+    return next(new HttpError("Uid not provided", 400));
+  }
+
+  let professor;
+  try {
+    professor = await professorModel.findOne({ uid });
+    if (!professor) {
+      return next(new HttpError("Professor not found", 404));
+    }
+  } catch (err) {
+    return next(new HttpError("Fetching professor details failed", 500));
+  }
+
+  let courses;
+  try {
+    courses = await ArchivedCourse.find({ professor: professor._id });
+  } catch (err) {
+    return next(new HttpError("Fetching archived courses failed, please try later", 500));
+  }
+
+  res.json({
+    courses: courses.map(course => course.toObject({ getters: true }))
+  });
+}
+
 async function handleViewAllStudents(req, res, next) {
   let students;
 
@@ -80,27 +109,30 @@ async function handleViewAllStudents(req, res, next) {
   });
 }
 
+// Fetch all the attendance records for a course
 async function handleViewAllAttendanceRecords(req, res, next) {
-  const { courseName, batch } = req.query;
+  const { courseName, batch, year, isArchived } = req.query;
 
-  // console.log(courseName);
-
-  //   console.log(courseName);
-  //   console.log(batch);
-
-  if (!courseName || !batch) {
+ 
+  if (!courseName || !batch || !year) {
     return next(new HttpError("Invalid Inputs", 422));
   }
 
+  if (isArchived === undefined || isArchived === null) {
+      return next(new HttpError("Info for archive is not provided", 400));
+  }
+
+  const isArchivedBool = isArchived === "true";
+  const model = isArchivedBool ? ArchivedCourse : Course;
+  const attendanceModel = isArchivedBool ? ArchivedAttendance : Attendance;
+
   let course;
   try {
-    course = await courseModel
-      .findOne({ name: courseName, batch: batch })
-      .populate("students");
+    course = await model
+      .findOne({ name: courseName, batch: batch, year: year })
   } catch (err) {
     return next(new HttpError("Cannot fetch course, try later", 500));
   }
-  // console.log(course);
 
   if (!course) {
     return next(new HttpError("Could not find course", 404));
@@ -109,8 +141,7 @@ async function handleViewAllAttendanceRecords(req, res, next) {
   let attendanceRecords;
   try {
     attendanceRecords = await attendanceModel.find({
-      course: course._id,
-      batch: batch,
+      course: course._id
     });
   } catch (err) {
     return next(new HttpError("Failed to fetch attendance records", 500));
@@ -130,12 +161,15 @@ async function handleViewAllAttendanceRecords(req, res, next) {
 }
 
 async function handleViewRecordData(req, res, next) {
-  const { recordId } = req.query;
+  const { recordId, isArchived } = req.query;
 
-  // console.log(recordId);
+  if (isArchived === undefined || isArchived === null) {
+    return next(new HttpError("Info for archive is not provided", 400));
+  } 
 
-  // console.log(courseName);
-  // console.log(batch);
+  const isArchivedBool = isArchived === "true";
+  const model = isArchivedBool ? ArchivedCourse : Course;
+  const attendanceModel = isArchivedBool ? ArchivedAttendance : Attendance;
 
   if (!recordId) {
     return next(new HttpError("Invalid Inputs", 422));
@@ -151,8 +185,6 @@ async function handleViewRecordData(req, res, next) {
     return next(new HttpError("Failed to fetch attendance records", 500));
   }
 
-  // console.log(records);
-
   if (!records) {
     return next(
       new HttpError("No attendance records found for this course", 404)
@@ -165,7 +197,7 @@ async function handleViewRecordData(req, res, next) {
 
   // fetch the course with the courseName
   try {
-    course = await courseModel.findById({ _id: courseId }).populate("students");
+    course = await model.findById({ _id: courseId }).populate("students");
   } catch (err) {
     return next(new HttpError("Cannot fetch course, try later", 500));
   }
@@ -173,8 +205,6 @@ async function handleViewRecordData(req, res, next) {
   if (!course) {
     return next(new HttpError("Could not find course", 404));
   }
-
-  //   console.log(course)
 
   const attendanceStatus = course.students.map((student) => ({
     rollno: student.rollno,
@@ -186,12 +216,21 @@ async function handleViewRecordData(req, res, next) {
 }
 
 async function handleProfessorViewAttendance(req, res, next) {
-  const { courseName, batch } = req.query;
+  const { courseName, batch, year, isArchived } = req.query;
+
+
+  if (isArchived === undefined || isArchived === null) {
+    return next(new HttpError("Info for archive is not provided", 400));
+  } 
+
+  const isArchivedBool = isArchived === "true";
+  const model = isArchivedBool ? ArchivedCourse : Course;
+  const attendanceModel = isArchivedBool ? ArchivedAttendance : Attendance;
 
   let course;
   try {
-    course = await courseModel
-      .findOne({ name: courseName, batch: batch })
+    course = await model
+      .findOne({ name: courseName, batch: batch, year: year })
       .populate("students");
   } catch (err) {
     return next(new HttpError("Cannot fetch course, try later", 500));
@@ -210,7 +249,6 @@ async function handleProfessorViewAttendance(req, res, next) {
   try {
     attendanceRecords = await attendanceModel.find({
       course: course._id,
-      batch: batch,
     });
   } catch (err) {
     return next(new HttpError("Failed to fetch attendance records", 500));
@@ -260,4 +298,5 @@ module.exports = {
   handleViewAllStudents,
   handleViewAllAttendanceRecords,
   handleViewRecordData,
+  handleViewArchivedCoursesByProfessor,
 };

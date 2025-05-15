@@ -1,17 +1,93 @@
-const courseModel = require("../Model/courseModel");
+const {Course, ArchivedCourse} = require("../Model/courseModel");
 const professorModel = require("../Model/professorModel");
 const HttpError = require("../Model/http-error");
+const { customAlphabet } = require('nanoid');
 const studentModel = require("../Model/studentModel");
+const { Attendance, ArchivedAttendance } = require("../Model/attendanceModel");
+var cron = require("node-cron")
+
+const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+const nanoid = customAlphabet(alphabet, 6);
+
+// View All Students in Course 
+async function handleViewStudentsInCourse(req, res, next) {
+  const { courseName, batch, isArchived, year } = req.query;
+
+
+  if (!courseName || !batch || !year) {
+    return next(new HttpError("Input fields are empty", 404));
+  }
+
+  if (isArchived === undefined || isArchived === null) {
+    return next(new HttpError("Info for archive is not provided", 400));
+  }
+
+  const isArchivedBool = isArchived === "true";
+  const model = isArchivedBool ? ArchivedCourse : Course;
+  const attendanceModel = isArchivedBool ? ArchivedAttendance : Attendance;
+
+  let course;
+  try {
+    course = await model
+      .findOne({ name: courseName, batch: batch, year: year })
+      .populate("students");
+  } catch (err) {
+    return next(new HttpError("Cannot fetch course, try later", 500));
+  }
+
+  if (!course) {
+    return next(new HttpError("Could not find course", 404));
+  }
+
+  let attendanceRecords;
+  try {
+    attendanceRecords = await attendanceModel.find({ course: course._id });
+  } catch (err) {
+    return next(new HttpError("Failed to fetch attendance records", 500));
+  }
+
+  const studentList = [];
+
+  for (const student of course.students) {
+    const attendedSessions = attendanceRecords.filter(record =>
+      record.student.includes(student._id)
+    );
+
+    const attendancePercentage =
+      attendanceRecords.length > 0
+        ? (attendedSessions.length / attendanceRecords.length) * 100
+        : 0;
+
+    studentList.push({
+      ...student.toObject({ getters: true }),
+      attendancePercentage: attendancePercentage.toFixed(2)
+    });
+  }
+
+  res.json({
+    students: studentList
+  });
+}
 
 // Create Course Request by Professor
 async function handleCourseCreation(req, res, next) {
   // professor email to identify professor and coureName (CS330)
-  const { batch, courseName } = req.body;
+  // Expiry Date in the format "date/month/Year"
+  const { batch, courseName, courseExpiry } = req.body;
   const uid = req.uid;
 
   // check if inputs are provided in req.body
-  if (!batch || !courseName || !uid) {
+  if (!batch || !courseName || !uid || !courseExpiry) {
     return next(new HttpError("Invalid feilds", 422));
+  }
+
+  const [day, month, year] = courseExpiry.split("/").map(Number);
+  const expiryDate = new Date(year, month - 1, day)
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); 
+  if (expiryDate < today) {
+    return next(new HttpError("Course expiry date has already passed", 400));
   }
 
   // fetch the professor to add course._id created in professor.courses[]
@@ -29,19 +105,24 @@ async function handleCourseCreation(req, res, next) {
     return next(new HttpError("Professor not found", 404));
   }
 
+    // Get current year
+    const currentYear = new Date().getFullYear();
+
+
   // make a valid course to save()
-  const courseCreated = new courseModel({
+  const courseCreated = new Course({
     name: courseName,
-    professor: professor._id,
     batch: batch,
+    year: currentYear,
+    professor: professor._id,
     students: [],
+    courseExpiry: expiryDate,
+    joiningCode: nanoid(),
   });
+
 
   try {
     // try saving the course and add its ._id to professor.courses
-    // Must have used sessions but this is standalong instance so not required,
-    // A replica set is a group of MongoDB servers that keep copies of the same data for fault tolerance,
-    // Transactions only work on replica sets which is by default supported by Mongo Atlas
     await courseCreated.save();
     professor.courses.push(courseCreated._id);
     await professor.save();
@@ -54,17 +135,65 @@ async function handleCourseCreation(req, res, next) {
     return next(error);
   }
 
+
   // Return the course created
   res.status(201).json({ course: courseCreated });
 }
 
+async function updateExpiredCourses() {
+
+  try {
+
+    const allCourses = await Course.find({});
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (const course of allCourses) {
+      if (today > course.courseExpiry) {
+        // 1. Archive the course
+        const archived = new ArchivedCourse(course.toObject());
+        archived.courseStatus = 'inactive';
+        await archived.save();
+
+        // 2. Remove course reference from professor
+        await professorModel.updateOne(
+          { _id: course.professor },
+          { $pull: { courses: course._id } }
+        );
+
+        // 3. Remove course reference from all students
+        await studentModel.updateMany(
+          { courses: course._id },
+          { $pull: { courses: course._id } }
+        );
+
+        // 4. Move attendance records to ArchivedAttendance
+        const attendanceRecords = await Attendance.find({ course: course._id });
+        for (const record of attendanceRecords) {
+          const archivedRecord = new ArchivedAttendance(record.toObject());
+          archivedRecord.course = archived._id; // Optional: link to archived course
+          await archivedRecord.save();
+          await Attendance.findByIdAndDelete(record._id);
+        }
+
+        // 5. Delete the course
+        await Course.findByIdAndDelete(course._id);
+      }
+    }
+
+    console.log("Expired courses and attendance archived successfully.");
+  } catch (err) {
+    console.error("Error archiving expired courses:", err);
+  }
+}
+
+cron.schedule("0 0 * * *", updateExpiredCourses, {
+  timezone: "Asia/Kolkata",
+}); // Runs daily at midnight
+
 // Update the list of students enrolled in course with provided list, remove or add students and their respective course in student Schema too
 async function handleCourseStudents(req, res, next) {
   let { rollno, courseName, batch } = req.body; // Extract student roll numbers array
-  
-  // console.log(rollno);
-  // console.log(batch);
-  // console.log(courseName);
 
   if (!courseName || !batch) {
     // check if inputs are provided
@@ -78,7 +207,7 @@ async function handleCourseStudents(req, res, next) {
   let course;
   try {
     // fetch the course to be modified
-    course = await courseModel
+    course = await Course
       .findOne({ name: courseName, batch: batch })
       .populate("students"); // Populate existing students
   } catch (err) {
@@ -146,35 +275,6 @@ async function handleCourseStudents(req, res, next) {
       message: "Course students updated successfully",
       students: course.students,
     });
-}
-
-async function handleViewStudentsInCourse(req, res, next) {
-  // const courseName = req.params.cid;
-  const { courseName, batch } = req.query;
-  if(!courseName || !batch){
-    return next(new HttpError("Input feild are empty", 404));
-  }
-
-  let course;
-
-  // fetch the course with the courseName
-  try {
-    course = await courseModel
-      .findOne({ name: courseName, batch: batch })
-      .populate("students");
-  } catch (err) {
-    return next(new HttpError("Cannot fetch course, try later", 500));
-  }
-
-  if (!course) {
-    return next(new HttpError("Could not find course", 404));
-  }
-
-  res.json({
-    student: course.students.map((student) =>
-      student.toObject({ getters: true })
-    ),
-  });
 }
 
 module.exports = {

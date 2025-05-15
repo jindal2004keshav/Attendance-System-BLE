@@ -5,6 +5,14 @@ const attendanceSchema = new mongoose.Schema({
     student: [{ type: mongoose.Schema.Types.ObjectId, ref: "studentModel", required: true}],
     date: { type: Date, default: Date.now},
     batch: {type: String, required: true},
-})
+}, { timestamps: true });
 
-module.exports = mongoose.model("Attendance", attendanceSchema, "attendances");
+const Attendance = mongoose.model("Attendance", attendanceSchema, "attendances");
+const ArchivedAttendance = mongoose.model("ArchivedAttendance", attendanceSchema, "archived_attendances");
+
+module.exports = {
+    Attendance,
+    ArchivedAttendance,
+  };
+  
+  

@@ -12,6 +12,7 @@ if (!admin.apps.length) {
 }
 
 async function extractToken(req, res, next){
+    // console.log(req.headers);
     if(!req.headers.authorization){
         return next(
             new HttpError("Firebase token not provided", 422)
@@ -29,7 +30,6 @@ async function extractToken(req, res, next){
     try {
         // Verify Firebase Token
         const decodedToken = await admin.auth().verifyIdToken(tokenid);
-        // console.log(decodedToken);
         req.uid = decodedToken.uid; // ✅ Attach decoded user info to request
         // console.log(req.uid);
         next();

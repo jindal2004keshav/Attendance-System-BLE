@@ -6,6 +6,7 @@ const professorRouter = require("./Routes/professor");
 const amdinRouter = require("./Routes/admin");
 const HttpError = require("./Model/http-error");
 const authRouter = require("./Routes/auth");
+const { customAlphabet } = require('nanoid');
 const { extractToken } = require("./Middleware/extractUid");
 
 const app = express();

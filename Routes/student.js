@@ -1,5 +1,5 @@
 const express = require("express");
-const { handleStudentViewCourse, handleStudentViewAttendance, handleStudentRegistration } = require("../Controller/studentController");
+const { handleStudentViewCourse, handleStudentViewAttendance, handleStudentRegistration, handleStudentJoinCourse, handleStudentProfile } = require("../Controller/studentController");
 const { handleMarkStudentAttendance } = require("../Controller/attendanceController");
 const { extractToken  } = require("../Middleware/extractUid");
 
@@ -12,5 +12,9 @@ studentRouter.get("/attendance", extractToken, handleStudentViewAttendance); // 
 studentRouter.post("/register", handleStudentRegistration);
 
 studentRouter.post("/attendance", extractToken, handleMarkStudentAttendance);  // extractToken
+
+studentRouter.post("/course/join", extractToken, handleStudentJoinCourse);
+
+studentRouter.get("/profile", extractToken, handleStudentProfile);
 
 module.exports = studentRouter;

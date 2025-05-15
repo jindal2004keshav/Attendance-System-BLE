@@ -1,13 +1,15 @@
 const express = require("express");
-const {handleProfessorRegistration, handleViewCoursesByProfessor, handleProfessorViewAttendance, handleViewAllStudents, handleViewAllAttendanceRecords, handleViewRecordData} = require("../Controller/professorController");
+const {handleProfessorRegistration, handleViewCoursesByProfessor, handleProfessorViewAttendance, handleViewAllStudents, handleViewAllAttendanceRecords, handleViewRecordData, handleViewArchivedCoursesByProfessor} = require("../Controller/professorController");
 const { handleCourseCreation, handleCourseStudents, handleViewStudentsInCourse} = require("../Controller/courseController");
-const { handleCreateAttendanceRecord, handleManualAttendance } = require("../Controller/attendanceController");
+const { handleCreateAttendanceRecord, handleManualAttendance, handleModifyAttendance, handleLiveModifyAttendance } = require("../Controller/attendanceController");
 const { extractToken  } = require("../Middleware/extractUid");
 const router = express.Router();
 
 router.post("/register",handleProfessorRegistration);
 
-router.get("/course", extractToken ,handleViewCoursesByProfessor);  // extract Token
+router.get("/course/current", extractToken ,handleViewCoursesByProfessor);  // extract Token
+
+router.get("/course/archived", extractToken , handleViewArchivedCoursesByProfessor);
 
 router.get("/course/student", handleViewStudentsInCourse);
 
@@ -25,7 +27,10 @@ router.get("/attendance/record", handleViewRecordData);
 
 router.patch("/attendance/manual", handleManualAttendance);
 
-//TODO
+router.patch("/attendance/modify", extractToken, handleModifyAttendance);
+
+router.patch("/attendance/live/modify", extractToken, handleLiveModifyAttendance);
+
 router.get("/fullattendance", handleProfessorViewAttendance);
 
 

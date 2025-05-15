@@ -1,6 +1,6 @@
 const HttpError = require("../Model/http-error");
-const attendanceModel = require("../Model/attendanceModel");
-const courseModel = require("../Model/courseModel");
+const {Attendance, ArchivedAttendance } = require("../Model/attendanceModel");
+const {Course, ArchivedCourse} = require("../Model/courseModel");
 const studentModel = require("../Model/studentModel");
 
 // Create attendance record by professor
@@ -16,7 +16,7 @@ async function handleCreateAttendanceRecord(req, res, next) {
 
   // fetch the course with the courseName
   try {
-    course = await courseModel.findOne({ name: courseName, batch: batch });
+    course = await Course.findOne({ name: courseName, batch: batch });
   } catch (err) {
     return next(new HttpError("Cannot fetch course, try later", 500));
   }
@@ -26,7 +26,7 @@ async function handleCreateAttendanceRecord(req, res, next) {
   }
 
   // create attendance record and save it
-  let attendanceRecord = new attendanceModel({
+  let attendanceRecord = new Attendance({
     course: course._id,
     student: [],
     date: Date.now(),
@@ -47,12 +47,11 @@ async function handleCreateAttendanceRecord(req, res, next) {
 async function handleMarkStudentAttendance(req, res, next) {
   const { uid } = req.body;
   const suid = req.uid;
-  // console.log(suid);
 
   let record;
 
   try {
-    record = await attendanceModel.findById(uid).populate("course");
+    record = await Attendance.findById(uid).populate("course");
   } catch (err) {
     return next(
       new HttpError("Cannot fetch attendance record, try later", 500)
@@ -70,7 +69,6 @@ async function handleMarkStudentAttendance(req, res, next) {
   } catch (err) {
     return next(new HttpError("Cannot fetch student, try later", 500));
   }
-  // console.log(student);
 
   if (!student) {
     return next(new HttpError("Could not find Student", 404));
@@ -103,7 +101,7 @@ async function handleManualAttendance(req, res, next) {
   }
 
   try {
-    let attendance = await attendanceModel.findById({ _id: uid });
+    let attendance = await Attendance.findById({ _id: uid });
 
     if (!attendance) {
       return next(new HttpError("No attendance found", 404));
@@ -124,8 +122,96 @@ async function handleManualAttendance(req, res, next) {
   }
 }
 
+async function handleModifyAttendance(req, res, next) {
+  let { rollno, id } = req.body;
+
+  if(!rollno || !id){
+    return next(new HttpError("Invalid input fields provided", 400));
+  }
+
+  if (!Array.isArray(rollno)) {
+    rollno = [];
+  }
+
+  try {
+    // First find the attendance record
+    let attendance = await Attendance.findById(id);
+    
+    if (!attendance) {
+      return next(new HttpError("Attendance record not found", 404));
+    }
+    
+    // Array to hold student IDs
+    let studentIds = [];
+    
+    // Find student IDs for each roll number
+    for (const roll of rollno) {
+      const student = await studentModel.findOne({ rollno: roll });
+      if (!student) {
+        return next(new HttpError(`Student with roll number ${roll} not found`, 404));
+      }
+      studentIds.push(student._id);
+    }
+    
+    // Update the attendance document with the new student IDs
+    attendance.student = studentIds;
+    
+    // Save the updated attendance document
+    await attendance.save();
+    
+    // Return the updated attendance with populated student data
+    const updatedAttendance = await Attendance.findById(id).populate("student");
+    
+    return res.status(200).json({
+      message: "Attendance updated successfully",
+    });
+    
+  } catch (err) {
+    console.error(err);
+    return next(new HttpError("Server Error in updating Attendance, please try later", 500));
+  }
+}
+
+async function handleLiveModifyAttendance(req, res, next) {
+  let { id, rollno } = req.body;
+
+  if (!id || !Array.isArray(rollno)) {
+    return next(new HttpError("Invalid input fields", 400));
+  }
+
+  try {
+    const attendance = await Attendance.findById(id);
+    if (!attendance) {
+      return next(new HttpError("Attendance record not found", 404));
+    }
+
+    for (const roll of rollno) {
+      if (attendance.student.includes(roll)) {
+        continue; // Skip if already present
+      }
+
+      const student = await studentModel.findOne({ rollno: roll });
+      if (!student) {
+        console.log(`Student with roll no ${roll} not found.`);
+        continue; // Skip if student not found
+      }
+
+      attendance.student.push(student._id);
+    }
+
+    await attendance.save();
+    res.status(200).json({ message: "Successfully modified attendance" });
+
+  } catch (err) {
+    console.error(err);
+    return next(new HttpError("Server error in modifying attendance", 500));
+  }
+}
+
 module.exports = {
   handleCreateAttendanceRecord,
   handleMarkStudentAttendance,
   handleManualAttendance,
+  handleModifyAttendance,
+  handleLiveModifyAttendance
 };
