@@ -1,6 +1,7 @@
 const express = require("express");
 const { handleStudentViewCourse, handleStudentViewAttendance, handleStudentRegistration, handleStudentJoinCourse, handleStudentProfile } = require("../Controller/studentController");
 const { handleMarkStudentAttendance } = require("../Controller/attendanceController");
+const {handleSimBinding} = require("../Controller/authController");
 const { extractToken  } = require("../Middleware/extractUid");
 
 const studentRouter = express.Router();
@@ -17,4 +18,5 @@ studentRouter.post("/course/join", extractToken, handleStudentJoinCourse);
 
 studentRouter.get("/profile", extractToken, handleStudentProfile);
 
+studentRouter.get("/sim", handleSimBinding)
 module.exports = studentRouter;
