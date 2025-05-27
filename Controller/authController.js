@@ -5,7 +5,7 @@ const adminModel = require("../Model/adminModel");
 const { deviceBinding } = require("../Model/deviceBindingModel");
 
 async function handleAuthRequest(req, res, next) {
-
+  
   // console.log("request received");
   const uid = req.headers.authorization?.split(" ")[1];
   if (!uid) {

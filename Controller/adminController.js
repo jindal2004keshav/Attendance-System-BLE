@@ -4,6 +4,7 @@ const csv = require("csv-parser");
 const validator = require("validator");
 
 const professorModel = require("../Model/professorModel");
+const {Course, ArchivedCourse} = require("../Model/courseModel");
 const studentModel = require("../Model/studentModel");
 const HttpError = require("../Model/http-error");
 const firebaseadmin = require("firebase-admin");
@@ -16,13 +17,13 @@ if (!firebaseadmin.apps.length) {
     });
 }
   
+// register students/professor using csv
 async function handleStudentRegistrationUsingCsv(req, res, next) {
-    console.log("CSV upload request received");
     if (!req.file) {
         return next(new HttpError("CSV file is required", 400));
     }
 
-
+    const isProfesor = req.headers;
     const results = [];
     const errors = [];
     const filePath = req.file.path;
@@ -31,24 +32,31 @@ async function handleStudentRegistrationUsingCsv(req, res, next) {
         await new Promise((resolve, reject) => {
             fs.createReadStream(filePath)
                 .pipe(csv())
-                .on("data", (row) => {
-                    results.push(row);
-                })
+                .on("data", (row) => results.push(row))
                 .on("end", resolve)
                 .on("error", reject);
         });
 
         for (const student of results) {
-            // Trim and normalize fields
-            const name = student.name?.trim();
-            const email = student.email?.replace(/\s+/g, "").toLowerCase();
-            const rollno = student.rollno?.trim();
-            const password = student.password?.trim();
+            const cleanedStudent = {};
+            for (const key in student) {
+                const trimmedKey = key.trim().replace(/^\uFEFF/, "");
+                cleanedStudent[trimmedKey] = student[key].trim();
+            }
 
-            // Basic validation
-            if (!email || !password || !name || !rollno) {
+            let { name, email, password } = cleanedStudent;
+            let rollno = null;
+            if (!isProfesor) {
+                rollno = cleanedStudent.rollno;
+            }
+
+            if (!email || !name || (!isProfesor && !rollno)) {
                 errors.push({ email: email || "N/A", error: "Missing required fields" });
                 continue;
+            }
+
+            if (!password) {
+                password = email.split("@")[0];
             }
 
             if (!validator.isEmail(email)) {
@@ -57,33 +65,40 @@ async function handleStudentRegistrationUsingCsv(req, res, next) {
             }
 
             try {
-                // Create Firebase Auth User
                 const userRecord = await firebaseadmin.auth().createUser({
                     email,
                     password,
                 });
 
-                // Save to MongoDB
                 const uid = userRecord.uid;
-                const newStudent = new studentModel({
-                    name,
-                    rollno,
-                    email,
-                    courses: [],
-                    uid,
-                    batch: [],
-                });
+                let newStudent;
+
+                if (!isProfesor) {
+                    newStudent = new studentModel({
+                        name,
+                        rollno,
+                        email,
+                        courses: [],
+                        uid,
+                        batch: [],
+                    });
+                } else {
+                    newStudent = new professorModel({
+                        name,
+                        email,
+                        courses: [],
+                        uid,
+                    });
+                }
 
                 await newStudent.save();
             } catch (err) {
-                console.error(`Error creating user ${email}:`, err.message);
                 errors.push({ email, error: err.message });
             }
         }
 
-        // Clean up uploaded CSV
         fs.unlink(filePath, (err) => {
-            if (err) console.error("Error deleting file:", err);
+            if (err) console.error("Failed to delete file:", err);
         });
 
         res.status(200).json({
@@ -93,14 +108,122 @@ async function handleStudentRegistrationUsingCsv(req, res, next) {
             success: results.length - errors.length,
         });
     } catch (err) {
-        console.error("CSV processing failed:", err.message);
-        fs.unlink(filePath, () => {}); // still attempt cleanup
+        fs.unlink(filePath, () => {});
         return next(new HttpError("Something went wrong while processing CSV", 500));
     }
 }
 
+// Register a single student profile
+async function handleCreateStudentAccount(req, res, next){
+    const { name, rollno, email, isProfessor } = req.body;
 
+  const uid = req.headers.authorization.split(" ")[1];
+
+  if (!name || !email || !uid || isProfessor == null) {
+    return next(new HttpError("Invalid inputs", 422));
+}
+
+
+if(!isProfessor && !rollno){
+    return next(new HttpError("Invalid inputs", 422));
+  }
+  
+  let studentCreated;
+
+  if(isProfessor){
+    studentCreated = new professorModel({
+        name: name,
+        email: email,
+        courses: [],
+        uid: uid
+    })
+  } else{
+      studentCreated = new studentModel({
+        name: name,
+        rollno: rollno,
+        email: email,
+        courses: [],
+        uid: uid,
+        batch: []
+      });
+  }
+
+  try {
+    await studentCreated.save();
+  } catch (err) {
+    const error = new HttpError("Registration failed, please tyr again.", 500);
+    console.log(err);
+    return next(error);
+  }
+console.log("successs");
+  return res
+    .status(200)
+    .json({ user: studentCreated.toObject({ getters: true }) });
+}
+
+// View all courses
+async function handleViewCurrentCoursesByAdmin(req, res, next) {
+
+  const uid = req.uid;
+
+  if (!uid) {
+    return next(new HttpError("not provided uid", 400));
+  }
+
+  // Fetch all courses using Mongoose
+  let courses;
+  try {
+    courses = await Course.find({});
+  } catch (err) {
+    console.log(err);
+    return next(
+      new HttpError("Fetching courses failed, please try again later.", 500)
+    );
+  }
+
+  // Check if courses were found
+  if (!courses || courses.length === 0) {
+    return next(new HttpError("Could not find courses", 404));
+  }
+
+  // Return all courses
+  res.json({
+    courses: courses.map((course) => course.toObject({ getters: true })),
+  });
+}
+
+async function handleViewArchiveCoursesByAdmin(req, res, next) {
+
+  const uid = req.uid;
+
+  if (!uid) {
+    return next(new HttpError("not provided uid", 400));
+  }
+
+  // Fetch all courses using Mongoose
+  let courses;
+  try {
+    courses = await ArchivedCourse.find({});
+  } catch (err) {
+    return next(
+      new HttpError("Fetching courses failed, please try again later.", 500)
+    );
+  }
+
+  // Check if courses were found
+  if (!courses || courses.length === 0) {
+    return next(new HttpError("Could not find courses", 404));
+  }
+
+  // Return all courses
+  res.json({
+    courses: courses.map((course) => course.toObject({ getters: true })),
+  });
+}
 
 module.exports = {
     handleStudentRegistrationUsingCsv,
+    handleCreateStudentAccount,
+    handleViewCurrentCoursesByAdmin,
+    handleViewArchiveCoursesByAdmin
 };

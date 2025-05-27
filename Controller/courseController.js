@@ -11,10 +11,11 @@ const nanoid = customAlphabet(alphabet, 6);
 
 // View All Students in Course 
 async function handleViewStudentsInCourse(req, res, next) {
-  const { courseName, batch, isArchived, year } = req.query;
+  const { courseName, batch, isArchived, year, joiningCode } = req.query;
 
+  console.log(joiningCode);
 
-  if (!courseName || !batch || !year) {
+  if (!courseName || !batch || !year || !joiningCode) {
     return next(new HttpError("Input fields are empty", 404));
   }
 
@@ -29,7 +30,7 @@ async function handleViewStudentsInCourse(req, res, next) {
   let course;
   try {
     course = await model
-      .findOne({ name: courseName, batch: batch, year: year })
+      .findOne({ name: courseName, batch: batch, year: year, joiningCode: joiningCode })
       .populate("students");
   } catch (err) {
     return next(new HttpError("Cannot fetch course, try later", 500));

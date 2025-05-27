@@ -1,13 +1,19 @@
 const express = require("express");
-const { handleStudentRegistrationUsingCsv } = require("../Controller/adminController");
+const { handleStudentRegistrationUsingCsv, handleCreateStudentAccount, handleViewCurrentCoursesByAdmin, handleViewArchiveCoursesByAdmin } = require("../Controller/adminController");
 const { extractToken  } = require("../Middleware/extractUid");
 const upload = require('../middleware/multerConfig');
 
-const amdinRouter = express.Router();
+const adminRouter = express.Router();
 
-amdinRouter.post("/register/student",upload.single('file'), handleStudentRegistrationUsingCsv);
+adminRouter.post("/register/student",upload.single('file'), handleStudentRegistrationUsingCsv);
+
+adminRouter.post("/create/student", handleCreateStudentAccount);
+
+adminRouter.get("/view/current/courses", extractToken, handleViewCurrentCoursesByAdmin);
+
+adminRouter.get("/view/archive/courses", extractToken, handleViewArchiveCoursesByAdmin);
 
 // amdinRouter.post("/register/professor",handleProfessorRegistration);
 
-module.exports = amdinRouter;
+module.exports = adminRouter;
 

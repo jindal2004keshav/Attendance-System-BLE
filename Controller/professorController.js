@@ -66,6 +66,7 @@ async function handleViewCoursesByProfessor(req, res, next) {
   });
 }
 
+// View all the archived courses by professor
 async function handleViewArchivedCoursesByProfessor(req, res, next) {
   const uid = req.uid;
 
@@ -111,10 +112,10 @@ async function handleViewAllStudents(req, res, next) {
 
 // Fetch all the attendance records for a course
 async function handleViewAllAttendanceRecords(req, res, next) {
-  const { courseName, batch, year, isArchived } = req.query;
+  const { joiningCode, courseName, batch, year, isArchived } = req.query;
 
  
-  if (!courseName || !batch || !year) {
+  if (!courseName || !batch || !year || !joiningCode) {
     return next(new HttpError("Invalid Inputs", 422));
   }
 
@@ -129,7 +130,7 @@ async function handleViewAllAttendanceRecords(req, res, next) {
   let course;
   try {
     course = await model
-      .findOne({ name: courseName, batch: batch, year: year })
+      .findOne({ name: courseName, batch: batch, year: year, joiningCode: joiningCode })
   } catch (err) {
     return next(new HttpError("Cannot fetch course, try later", 500));
   }
@@ -215,11 +216,12 @@ async function handleViewRecordData(req, res, next) {
   res.json({ attendance: attendanceStatus });
 }
 
+// Complete attendance record for excel 
 async function handleProfessorViewAttendance(req, res, next) {
-  const { courseName, batch, year, isArchived } = req.query;
+  const { courseName, batch, year, isArchived, joiningCode } = req.query;
 
 
-  if (isArchived === undefined || isArchived === null) {
+  if (isArchived === undefined || isArchived === null || joiningCode == null) {
     return next(new HttpError("Info for archive is not provided", 400));
   } 
 
@@ -230,7 +232,7 @@ async function handleProfessorViewAttendance(req, res, next) {
   let course;
   try {
     course = await model
-      .findOne({ name: courseName, batch: batch, year: year })
+      .findOne({ name: courseName, batch: batch, year: year, joiningCode: joiningCode })
       .populate("students");
   } catch (err) {
     return next(new HttpError("Cannot fetch course, try later", 500));
@@ -290,6 +292,28 @@ async function handleProfessorViewAttendance(req, res, next) {
   res.status(200).json({ attendanceSheet });
 }
 
+async function handleProfessorProfile(req, res, next) {
+  const uid = req.uid;
+
+  if(!uid){
+    return next(new HttpError("No uid provided", 400));
+  }
+
+  let professor;
+
+  try{
+    professor = await professorModel.findOne({uid: uid}).populate("courses");
+  } catch (err){
+    return next(new HttpError("Server error in finding profile", 500));
+  }
+
+  if(!professor){
+    return next(new HttpError("No professor found", 404));
+  }
+
+  return res.status(200).json(professor.toObject());
+}
+
 
 module.exports = {
   handleProfessorRegistration,
@@ -299,4 +323,5 @@ module.exports = {
   handleViewAllAttendanceRecords,
   handleViewRecordData,
   handleViewArchivedCoursesByProfessor,
+  handleProfessorProfile
 };
