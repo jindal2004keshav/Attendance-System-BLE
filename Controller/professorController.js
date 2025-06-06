@@ -96,6 +96,7 @@ async function handleViewArchivedCoursesByProfessor(req, res, next) {
   });
 }
 
+// View all students
 async function handleViewAllStudents(req, res, next) {
   let students;
 

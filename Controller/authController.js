@@ -136,5 +136,5 @@ async function handleSimBinding(req, res, next) {
 
 module.exports = {
   handleAuthRequest,
-  handleSimBinding
+  handleSimBinding,
 };

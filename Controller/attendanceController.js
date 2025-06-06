@@ -5,10 +5,10 @@ const studentModel = require("../Model/studentModel");
 
 // Create attendance record by professor
 async function handleCreateAttendanceRecord(req, res, next) {
-  const { courseName, batch } = req.body;
+  const { courseName, batch, joiningCode } = req.body;
 
   // validate if course name is provided
-  if (!courseName || !batch) {
+  if (!courseName || !batch || !joiningCode) {
     return next(new HttpError("Inputs not provided", 422));
   }
 
@@ -16,7 +16,7 @@ async function handleCreateAttendanceRecord(req, res, next) {
 
   // fetch the course with the courseName
   try {
-    course = await Course.findOne({ name: courseName, batch: batch });
+    course = await Course.findOne({ name: courseName, batch: batch, joiningCode: joiningCode });
   } catch (err) {
     return next(new HttpError("Cannot fetch course, try later", 500));
   }

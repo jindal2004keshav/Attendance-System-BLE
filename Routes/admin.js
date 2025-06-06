@@ -1,5 +1,5 @@
 const express = require("express");
-const { handleStudentRegistrationUsingCsv, handleCreateStudentAccount, handleViewCurrentCoursesByAdmin, handleViewArchiveCoursesByAdmin } = require("../Controller/adminController");
+const { handleStudentRegistrationUsingCsv, handleCreateStudentAccount, handleViewCurrentCoursesByAdmin, handleViewArchiveCoursesByAdmin, handleViewAllProfessor, handleViewStudentAttendance } = require("../Controller/adminController");
 const { extractToken  } = require("../Middleware/extractUid");
 const upload = require('../middleware/multerConfig');
 
@@ -13,7 +13,9 @@ adminRouter.get("/view/current/courses", extractToken, handleViewCurrentCoursesB
 
 adminRouter.get("/view/archive/courses", extractToken, handleViewArchiveCoursesByAdmin);
 
-// amdinRouter.post("/register/professor",handleProfessorRegistration);
+adminRouter.get("/view/professor", extractToken, handleViewAllProfessor);
+
+adminRouter.get("/student/attendance", extractToken, handleViewStudentAttendance);
 
 module.exports = adminRouter;
 

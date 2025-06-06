@@ -38,11 +38,12 @@ router.get("/course/student", handleViewStudentsInCourse);
 
 router.post("/course", extractToken, handleCourseCreation); // extract Token
 
+// View All students
 router.get("/students", handleViewAllStudents);
 
 router.patch("/course", handleCourseStudents);
 
-router.post("/attendance", handleCreateAttendanceRecord);
+router.post("/attendance", extractToken, handleCreateAttendanceRecord);
 
 // View all the record for a selected course
 router.get("/attendance/course", handleViewAllAttendanceRecords);

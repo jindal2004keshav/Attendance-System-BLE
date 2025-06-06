@@ -5,6 +5,7 @@ const validator = require("validator");
 
 const professorModel = require("../Model/professorModel");
 const {Course, ArchivedCourse} = require("../Model/courseModel");
+const {Attendance, ArchivedAttendance} = require("../Model/attendanceModel");
 const studentModel = require("../Model/studentModel");
 const HttpError = require("../Model/http-error");
 const firebaseadmin = require("firebase-admin");
@@ -152,10 +153,8 @@ if(!isProfessor && !rollno){
     await studentCreated.save();
   } catch (err) {
     const error = new HttpError("Registration failed, please tyr again.", 500);
-    console.log(err);
     return next(error);
   }
-console.log("successs");
   return res
     .status(200)
     .json({ user: studentCreated.toObject({ getters: true }) });
@@ -175,7 +174,6 @@ async function handleViewCurrentCoursesByAdmin(req, res, next) {
   try {
     courses = await Course.find({});
   } catch (err) {
-    console.log(err);
     return next(
       new HttpError("Fetching courses failed, please try again later.", 500)
     );
@@ -221,9 +219,99 @@ async function handleViewArchiveCoursesByAdmin(req, res, next) {
   });
 }
 
+// View all professor
+async function handleViewAllProfessor(req, res, next) {
+  let professors;
+
+  try {
+    professors = await professorModel.find({});
+  } catch (err) {
+    return next(new HttpError("Cannot fetch Professors", 500));
+  }
+
+  res.status(200).json({
+    professor: professors.map((professor) => professor.toObject({ getters: true })),
+  });
+}
+
+async function handleViewStudentAttendance(req, res, next) {
+  const { name, rollno } = req.query;
+  
+  if (!name || !rollno) {
+    return next(new HttpError("Fields cannot be empty", 400));
+  }
+  
+  const cleanedRollno = rollno.replace(/[^\d]/g, '');
+  const roll = parseInt(cleanedRollno, 10);
+  const nameClean = name.trim();
+  console.log(cleanedRollno)
+  
+  if (isNaN(roll)) {
+    return next(new HttpError("Invalid roll number", 400));
+  }
+  
+  try {
+    const student = await studentModel
+    .findOne({ rollno: roll, name: nameClean })
+    .populate("courses"); 
+    console.log(student)
+    
+    if (!student) {
+      return next(new HttpError("No student found with provided rollNo and name", 404));
+    }
+
+    const attendance = [];
+
+    if (student.courses.length === 0) {
+      console.log("no courses")
+      // attendance.push()
+      return next(new HttpError("No courses Enrolled", 404));
+    }
+
+    for (const course of student.courses) {
+      let allAttendanceRecords;
+
+      try {
+        allAttendanceRecords = await Attendance.find({ course: course._id });
+      } catch (err) {
+        return next(new HttpError("Server error in finding attendance", 500));
+      }
+
+      let presentCount = 0;
+      for (const record of allAttendanceRecords) {
+        if (Array.isArray(record.student)) {
+          if (record.student.includes(student._id)) {
+            presentCount++;
+          }
+        } else {
+          if (record.student.toString() === student._id.toString()) {
+            presentCount++;
+          }
+        }
+      }
+
+      attendance.push({
+        course: course.name,
+        batch: course.batch, 
+        courseYear: course.year,
+        presentCount,
+        totalTaken: allAttendanceRecords.length,
+      });
+    }
+
+    return res.status(200).json({ attendanceData: attendance });
+
+  } catch (err) {
+    console.error(err);
+    return next(new HttpError("Server Error finding student", 500));
+  }
+}
+
 module.exports = {
     handleStudentRegistrationUsingCsv,
     handleCreateStudentAccount,
     handleViewCurrentCoursesByAdmin,
-    handleViewArchiveCoursesByAdmin
+    handleViewArchiveCoursesByAdmin,
+    handleViewAllProfessor,
+    handleViewStudentAttendance
 };

@@ -13,8 +13,6 @@ const nanoid = customAlphabet(alphabet, 6);
 async function handleViewStudentsInCourse(req, res, next) {
   const { courseName, batch, isArchived, year, joiningCode } = req.query;
 
-  console.log(joiningCode);
-
   if (!courseName || !batch || !year || !joiningCode) {
     return next(new HttpError("Input fields are empty", 404));
   }
@@ -182,7 +180,6 @@ async function updateExpiredCourses() {
       }
     }
 
-    console.log("Expired courses and attendance archived successfully.");
   } catch (err) {
     console.error("Error archiving expired courses:", err);
   }
